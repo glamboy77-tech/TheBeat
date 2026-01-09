@@ -1,0 +1,21 @@
+# The Beat - 한국 주식 시장 장전 브리핑 텔레그램 봇
+# 필수 패키지 목록
+
+# 한국 주식 데이터 수집
+pykrx>=1.0.51
+finance-datareader>=0.9.50
+
+# HTTP 요청
+requests>=2.31.0
+
+# 텔레그램 봇
+python-telegram-bot>=20.0
+
+# AI 분석 (Gemini)
+google-genai>=0.2.0
+
+# 환경 변수 관리
+python-dotenv>=1.0.0
+
+# 유틸리티
+setuptools>=80.0.0
