@@ -135,9 +135,9 @@ python dart_collector.py
 - [x] 종목명 매칭 (`stock_matcher.py`)
 - [x] 뉴스 수집 (`news_collector.py`)
 - [x] 공시 수집 (`dart_collector.py`)
-- [ ] AI 분석 (`analyzer.py`)
-- [ ] 텔레그램 전송 (`telegram_bot.py`)
-- [ ] 메인 통합 (`main.py`)
+- [x] AI 분석 (`analyzer.py`)
+- [x] 텔레그램 전송 (`telegram_bot.py`)
+- [x] 메인 통합 (`main.py`)
 
 ## 📝 라이선스
 
