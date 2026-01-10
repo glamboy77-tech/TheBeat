@@ -5,6 +5,7 @@ The Beat - 메인 실행 파일
 
 import asyncio
 import logging
+import sys
 from datetime import datetime
 
 # 모듈 임포트
@@ -13,6 +14,7 @@ from news_collector import NaverNewsCollector
 from dart_collector import DartCollector
 from analyzer import GeminiAnalyzer
 from telegram_bot import TelegramSender
+from market_checker import check_market_status_once
 
 # 로깅 설정
 logging.basicConfig(
@@ -31,34 +33,32 @@ async def main():
         logger.info(f"The Beat 실행 시작: {datetime.now()}")
         logger.info("="*60)
         
-        # 한국 거래소 개장일 체크 (주말 + 공휴일 자동 감지)
-        def is_market_open():
-            """오늘이 한국 거래소 개장일인지 확인"""
-            from pykrx import stock
-            import logging as log
-            
-            # pykrx 로그 억제
-            log.getLogger("pykrx").setLevel(log.CRITICAL)
-            log.getLogger().setLevel(log.CRITICAL)
-            
-            try:
-                today = datetime.now().strftime("%Y%m%d")
-                # 삼성전자(005930) 기준으로 오늘 거래 데이터 확인
-                df = stock.get_market_ohlcv(today, today, "005930")
-                return not df.empty
-            except:
-                # API 실패 시 평일 여부로 판단 (fallback)
-                return datetime.now().weekday() < 5
-            finally:
-                # 로그 레벨 복구
-                log.getLogger("pykrx").setLevel(log.WARNING)
-                log.getLogger().setLevel(log.INFO)
+        # [Step 0] 키움 웹소켓으로 장 상태 확인
+        logger.info("[Step 0] 장 상태 확인 (키움 웹소켓)")
+        market_status = await check_market_status_once()
         
-        if not is_market_open():
+        logger.info(f"장 상태: {market_status['status_name']}")
+        logger.info(f"개장 여부: {market_status['is_open']}")
+        logger.info(f"개장 시간: {market_status['open_time']}")
+        
+        # 휴장이면 텔레그램 알림 후 종료
+        if not market_status['is_open']:
+            logger.info("오늘은 휴장일입니다. 브리핑을 보내지 않고 종료합니다.")
+            
+            # 휴장 알림 메시지 전송 (선택사항)
+            import os
+            from dotenv import load_dotenv
+            load_dotenv()
+            
+            sender = TelegramSender()
             today = datetime.now()
             day_name = ['월','화','수','목','금','토','일'][today.weekday()]
-            logger.info(f"오늘({today.strftime('%Y-%m-%d')} {day_name})은 한국 거래소 휴장일입니다. 실행을 건너뜁니다.")
-            return
+            休장_msg = [{"stock": "휴장", "grade": "INFO", "sector": "공지", 
+                        "point": f"오늘({today.strftime('%Y-%m-%d')} {day_name})은 한국 거래소 휴장일입니다."}]
+            
+            await sender.send_holiday_message(today)
+            logger.info("휴장 메시지 전송 완료")
+            sys.exit(0)
         
         # 1. 환경 변수 확인 및 초기화
         import os
@@ -106,8 +106,14 @@ async def main():
 
         # 4. 텔레그램 전송
         logger.info("[Step 3] 텔레그램 전송")
+        # 마지막 영업일을 브리핑 기준 날짜로 사용
+        from utils import get_last_trading_day
+        last_trading_day_str = get_last_trading_day()
+        report_date = datetime.strptime(last_trading_day_str, "%Y%m%d")
+        
         sender = TelegramSender()
-        await sender.send_report(analyzed_results)
+        # 개장 시간 정보를 함께 전달
+        await sender.send_report(analyzed_results, report_date, market_status['open_time'])
         
         logger.info("모든 작업이 성공적으로 완료되었습니다.")
         

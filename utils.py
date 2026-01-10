@@ -93,6 +93,10 @@ def get_data_collection_timerange(base_date=None):
     시작 시간: 마지막 영업일 오후 4시 (16:00)
     종료 시간: 현재 시간 (또는 base_date)
     
+    주말/휴장일 고려:
+    - 월요일 아침: 금요일 16:00부터 수집
+    - 화~금 아침: 전일 16:00부터 수집
+    
     Args:
         base_date (datetime, optional): 기준 시간. None이면 현재 시간.
                                       백테스트 시 '2026-01-02 08:20:00' 등으로 설정
@@ -106,37 +110,24 @@ def get_data_collection_timerange(base_date=None):
     else:
         end_datetime = base_date
     
-    # 마지막 영업일 찾기위한 기준점 설정
-    # 만약 현재(end_datetime)가 장 시작 전(09:00 이전)이라면, 
-    # 마지막 영업일은 '어제' (또는 지난 금요일)여야 함.
-    # pykrx나 fallback 로직이 '오늘'을 뱉을 수 있으므로 조정 필요
-    
+    # 마지막 영업일 찾기
+    # 오전(9시 이전)에 실행되면 어제 기준으로 영업일 찾기
     search_date = end_datetime
     if end_datetime.hour < 9:
+        # 오늘이 월요일이면 금요일, 화~금이면 전일을 찾아야 함
         search_date = end_datetime - timedelta(days=1)
-        
-    # 마지막 영업일 가져오기
+    
+    # 마지막 영업일 가져오기 (주말/공휴일 자동 스킵)
     last_trading_day_str = get_last_trading_day(search_date)
     last_trading_day = datetime.strptime(last_trading_day_str, "%Y%m%d")
     
-    # 만약 계산된 영업일이 현재 시간보다 미래라면(말이 안되지만), 하루 더 뒤로
-    if last_trading_day > end_datetime:
-         last_trading_day -= timedelta(days=1)
-         
-    # 시작 시간 설정 (16:00)
+    # 시작 시간: 마지막 영업일 16:00
     start_datetime = last_trading_day.replace(hour=16, minute=0, second=0, microsecond=0)
     
-    # 만약 시작시간이 종료시간보다 늦다면(예: 당일 16:00 vs 당일 08:00), 
-    # 영업일을 하루 더 전으로 돌려야 함
-    if start_datetime > end_datetime:
-        start_datetime -= timedelta(days=1)
-        # 주말 건너뛰기 로직이 필요할 수 있으나, get_last_trading_day가 처리했길 기대
-        # fallback 로직 상 단순 하루 빼기만 하면 주말에 걸릴 수 있음.
-        # 안전하게 다시 계산
-        safe_search_date = start_datetime - timedelta(days=1)
-        last_trading_day_str = get_last_trading_day(safe_search_date)
-        last_trading_day = datetime.strptime(last_trading_day_str, "%Y%m%d")
-        start_datetime = last_trading_day.replace(hour=16, minute=0, second=0, microsecond=0)
+    # 디버그 로그
+    logger.debug(f"end_datetime: {end_datetime}")
+    logger.debug(f"search_date: {search_date}")
+    logger.debug(f"last_trading_day: {last_trading_day}")
     
     logger.info(f"데이터 수집 범위: {start_datetime} ~ {end_datetime}")
     logger.info(f"수집 기간: {(end_datetime - start_datetime).total_seconds() / 3600:.1f}시간")

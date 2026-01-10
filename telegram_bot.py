@@ -41,15 +41,25 @@ class TelegramSender:
             text = text.replace(char, f"\\{char}")
         return text
 
-    def _format_report(self, analysis_results: list) -> str:
-        """분석 결과를 마크다운 메시지로 변환"""
+    def _format_report(self, analysis_results: list, report_date: datetime = None, market_open_time: str = "9시") -> str:
+        """분석 결과를 마크다운 메시지로 변환
+        
+        Args:
+            analysis_results: 분석 결과 리스트
+            report_date: 브리핑 기준 날짜 (마지막 영업일). None이면 현재 날짜 사용
+            market_open_time: 개장 시간 (예: "9시", "10시")
+        """
         if not analysis_results:
             return "☕ *오늘 아침은 조용하네요\\.*\n무리한 매매는 금물입니다\\! 관망하며 기회를 노려보세요\\."
             
-        now = datetime.now()
-        date_str = self._escape_markdown(now.strftime("%Y년 %m월 %d일"))
+        # 브리핑 기준 날짜 사용 (마지막 영업일)
+        if report_date is None:
+            report_date = datetime.now()
+        date_str = self._escape_markdown(report_date.strftime("%Y년 %m월 %d일"))
+        safe_open_time = self._escape_markdown(market_open_time)
         
-        message = f"📢 *The Beat 장전 브리핑* \\({date_str}\\)\n\n"
+        message = f"📢 *The Beat 장전 브리핑* \\({date_str}\\)\n"
+        message += f"🕐 오늘 개장 시간: *{safe_open_time}*\n\n"
         
         # 등급순 정렬 (S -> A -> B -> C)
         grade_order = {'S': 0, 'A': 1, 'B': 2, 'C': 3}
@@ -85,13 +95,19 @@ class TelegramSender:
         
         return message
 
-    async def send_report(self, analysis_results: list):
-        """리포트 생성 및 전송"""
+    async def send_report(self, analysis_results: list, report_date: datetime = None, market_open_time: str = "9시"):
+        """리포트 생성 및 전송
+        
+        Args:
+            analysis_results: 분석 결과 리스트
+            report_date: 브리핑 기준 날짜 (마지막 영업일). None이면 현재 날짜 사용
+            market_open_time: 개장 시간 (예: "9시", "10시")
+        """
         if not self.token or not self.chat_id:
             logger.error("텔레그램 토큰이 없어 메시지를 보낼 수 없습니다.")
             return
 
-        message = self._format_report(analysis_results)
+        message = self._format_report(analysis_results, report_date, market_open_time)
         
         try:
             bot = Bot(token=self.token)
@@ -102,6 +118,39 @@ class TelegramSender:
                 disable_web_page_preview=True
             )
             logger.info("텔레그램 메시지 전송 완료")
+            
+        except TelegramError as e:
+            logger.error(f"텔레그램 전송 실패: {e}")
+    
+    async def send_holiday_message(self, holiday_date: datetime):
+        """휴장일 알림 메시지 전송
+        
+        Args:
+            holiday_date: 휴장일 날짜
+        """
+        if not self.token or not self.chat_id:
+            logger.error("텔레그램 토큰이 없어 메시지를 보낼 수 없습니다.")
+            return
+        
+        day_name = ['월','화','수','목','금','토','일'][holiday_date.weekday()]
+        date_str = self._escape_markdown(holiday_date.strftime("%Y년 %m월 %d일"))
+        safe_day = self._escape_markdown(day_name)
+        
+        message = f"🌙 *휴장일 알림*\\n\\n"
+        message += f"오늘 {date_str} \\({safe_day}\\)은 한국 거래소 *휴장일*입니다\\.\\n\\n"
+        message += f"푹 쉬시고 다음 개장일에 만나요\\! 😊\\n\\n"
+        message += f"\\-\\-\\-\\n"
+        message += f"💤 _휴식도 투자의 일부입니다\\._"
+        
+        try:
+            bot = Bot(token=self.token)
+            await bot.send_message(
+                chat_id=self.chat_id,
+                text=message,
+                parse_mode=ParseMode.MARKDOWN_V2,
+                disable_web_page_preview=True
+            )
+            logger.info("휴장일 메시지 전송 완료")
             
         except TelegramError as e:
             logger.error(f"텔레그램 전송 실패: {e}")
