@@ -14,6 +14,7 @@ from news_collector import NaverNewsCollector
 from dart_collector import DartCollector
 from analyzer import GeminiAnalyzer
 from telegram_bot import TelegramSender
+from redis_sender import TheBeatSender
 from market_checker import check_market_status_once
 
 # 로깅 설정
@@ -114,6 +115,15 @@ async def main():
         sender = TelegramSender()
         # 개장 시간 정보를 함께 전달
         await sender.send_report(analyzed_results, report_date, market_status['open_time'])
+        
+        # 5. Redis 송신 (S/A 등급만)
+        logger.info("[Step 4] Redis 송신 (S/A 등급 필터링)")
+        try:
+            redis_sender = TheBeatSender()
+            redis_stats = redis_sender.blast_news_batch(analyzed_results)
+            logger.info(f"Redis 송신 완료: 전송 {redis_stats['sent']}건, 필터링 {redis_stats['filtered']}건, 중복 {redis_stats['duplicated']}건")
+        except Exception as e:
+            logger.warning(f"Redis 송신 실패 (무시하고 계속): {e}")
         
         logger.info("모든 작업이 성공적으로 완료되었습니다.")
         

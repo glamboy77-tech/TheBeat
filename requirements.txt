@@ -20,5 +20,8 @@ google-genai>=0.2.0
 # 환경 변수 관리
 python-dotenv>=1.0.0
 
+# Redis (뉴스 중복 방지)
+redis>=5.0.0
+
 # 유틸리티
 setuptools>=80.0.0
